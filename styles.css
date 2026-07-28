@@ -1,0 +1,187 @@
+:root {
+  color-scheme: dark;
+  --bg: #1b1c1e;
+  --panel: #232427;
+  --border: #35363a;
+  --text: #eaecf0;
+  --text-dim: #9a9ca3;
+  --accent: #d97757;
+  --accent-hover: #e88a6b;
+  --nm-row: #3a2f1f;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.data-info {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+main {
+  flex: 1;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.field-row:last-child {
+  margin-bottom: 0;
+}
+
+.field-row label {
+  min-width: 130px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  color: var(--text);
+  background: #17181a;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+input,
+select {
+  flex: 1;
+  min-width: 160px;
+}
+
+input[type="number"] {
+  flex: none;
+  width: 90px;
+}
+
+button {
+  cursor: pointer;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1b1c1e;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+button:hover {
+  background: var(--accent-hover);
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+button.secondary:hover {
+  border-color: var(--text-dim);
+}
+
+#header {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+
+.sub {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+th {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+tr.nm-row {
+  background: var(--nm-row);
+}
+
+.calc-panel h3 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+#calcLbl {
+  color: var(--text);
+}
+
+footer {
+  padding: 8px 20px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .field-row label {
+    min-width: 100%;
+  }
+}
