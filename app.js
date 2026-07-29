@@ -58,7 +58,11 @@ async function startup() {
   setStatus("Loading zone list...");
   try {
     const meta = await apiGet("/api/zones");
-    allZones = meta.zones;
+    // Only zones that actually have lottery NMs are worth showing in the picker.
+    allZones = (meta.zoneMeta || [])
+      .filter((z) => z.count > 0 && !z.error)
+      .map((z) => z.zone)
+      .sort();
     const list = $("zoneList");
     list.innerHTML = "";
     for (const z of allZones) {
@@ -67,7 +71,9 @@ async function startup() {
       list.appendChild(opt);
     }
     const updated = meta.updatedAt ? new Date(meta.updatedAt).toLocaleString() : "unknown";
-    $("dataInfo").textContent = `${allZones.length} zones, ${meta.totalNMs} lottery NM(s) — data last refreshed ${updated}`;
+    $("dataInfo").textContent =
+      `${allZones.length} zones with lottery NMs (of ${meta.zones.length} total) — ` +
+      `${meta.totalNMs} lottery NM(s) — data last refreshed ${updated}`;
     setStatus("Ready. Pick a zone, or search for an NM by name.");
   } catch (e) {
     setStatus(`Error: ${e.message || e}`);
@@ -208,9 +214,14 @@ async function searchNm() {
 }
 
 function init() {
-  $("loadZoneBtn").addEventListener("click", loadZone);
   $("zoneInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter") loadZone();
+  });
+  // Auto-load as soon as the typed/selected text exactly matches a real zone
+  // (this fires immediately when picking an option from the datalist).
+  $("zoneInput").addEventListener("input", (e) => {
+    const typed = e.target.value.trim().toLowerCase();
+    if (allZones.some((z) => z.replace(/_/g, " ").toLowerCase() === typed)) loadZone();
   });
   $("nmSelect").addEventListener("change", (e) => {
     const idx = e.target.selectedIndex;
