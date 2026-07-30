@@ -43,11 +43,13 @@ function setStatus(msg) {
   $("status").textContent = msg;
 }
 
+const CATEGORY_LABEL = { lottery: "Lottery", nm: "NM", hnm: "HNM" };
+
 async function startup() {
   setStatus("Loading zone list...");
   try {
     const meta = await apiGet("/api/zones");
-    // Only zones that actually have lottery NMs are worth showing in the picker.
+    // Only zones that actually have NMs (of any type) are worth showing in the picker.
     allZones = (meta.zoneMeta || [])
       .filter((z) => z.count > 0 && !z.error)
       .map((z) => z.zone)
@@ -62,8 +64,8 @@ async function startup() {
     }
     const updated = meta.updatedAt ? new Date(meta.updatedAt).toLocaleString() : "unknown";
     $("dataInfo").textContent =
-      `${allZones.length} zones with lottery NMs (of ${meta.zones.length} total) — ` +
-      `${meta.totalNMs} lottery NM(s) — data last refreshed ${updated}`;
+      `${allZones.length} zones with NMs (of ${meta.zones.length} total) — ` +
+      `${meta.totalNMs} NM(s) — data last refreshed ${updated}`;
     setStatus("Ready. Pick a zone, or search for an NM by name.");
   } catch (e) {
     setStatus(`Error: ${e.message || e}`);
@@ -80,7 +82,7 @@ async function loadZone(zone) {
     const entries = await apiGet(`/api/zone?name=${encodeURIComponent(zone)}`);
     entries.sort((a, b) => a.name.localeCompare(b.name));
     populate(entries);
-    setStatus(`${zone}: ${entries.length} lottery NM(s) with placeholder lists.`);
+    setStatus(`${zone}: ${entries.length} NM(s) found.`);
   } catch (e) {
     setStatus(`Error: ${e.message || e}`);
   }
@@ -94,9 +96,8 @@ function populate(entries) {
 
   if (!entries.length) {
     sel.disabled = true;
-    $("header").textContent = "No lottery NMs found here.";
-    $("sub").textContent =
-      "Every NM in this zone is a timed or forced spawn (no entity.phList in its script).";
+    $("header").innerHTML = "No NMs found here.";
+    $("sub").textContent = "";
     renderTable(null);
     renderDrops(null);
     return;
@@ -106,7 +107,7 @@ function populate(entries) {
     const opt = document.createElement("option");
     let label = e.name;
     if (multiZone) label += `  (${e.zone.replace(/_/g, " ")})`;
-    if (e.chance != null) label += `  -  ${e.chance}%`;
+    label += e.chance != null ? `  -  ${e.chance}%` : `  [${CATEGORY_LABEL[e.category] || "NM"}]`;
     opt.textContent = label;
     sel.appendChild(opt);
   }
@@ -117,14 +118,25 @@ function populate(entries) {
 
 function selectEntry(e) {
   currentEntry = e;
-  const chance = e.chance != null ? `${e.chance}%` : "unknown";
-  const respawn = e.respawn || "unknown";
-  $("header").textContent = `${e.name}  -  ${e.zone.replace(/_/g, " ")}`;
-  const cap = roundsToGuarantee(e.chance);
-  const capTxt = cap ? `, guaranteed by round ${cap}` : "";
-  $("sub").textContent =
-    `Spawn chance per PH kill: ${chance}${capTxt}   |   PH respawn: ${respawn}   |   ` +
-    `${e.placeholders.length} placeholder(s)   |   Mob ID ${e.id} (0x${e.id.toString(16).toUpperCase()})`;
+  const catClass = `badge-${e.category || "nm"}`;
+  $("header").innerHTML =
+    `${e.name}  -  ${e.zone.replace(/_/g, " ")}` +
+    `<span id="categoryBadge" class="badge ${catClass}">${CATEGORY_LABEL[e.category] || "NM"}</span>`;
+
+  if (e.category === "lottery") {
+    const chance = e.chance != null ? `${e.chance}%` : "unknown";
+    const respawn = e.respawn || "unknown";
+    const cap = roundsToGuarantee(e.chance);
+    const capTxt = cap ? `, guaranteed by round ${cap}` : "";
+    $("sub").textContent =
+      `Spawn chance per PH kill: ${chance}${capTxt}   |   PH respawn: ${respawn}   |   ` +
+      `${e.placeholders.length} placeholder(s)   |   Mob ID ${e.id} (0x${e.id.toString(16).toUpperCase()})`;
+    $("calcPanel").style.display = "";
+  } else {
+    const conditions = (e.conditions || []).join("   |   ") || "Unknown spawn condition";
+    $("sub").textContent = `${conditions}   |   Mob ID ${e.id} (0x${e.id.toString(16).toUpperCase()})`;
+    $("calcPanel").style.display = "none";
+  }
   renderTable(e);
   renderDrops(e);
   updateCalc();
@@ -181,10 +193,13 @@ function updateCalc() {
 async function copyDetails() {
   if (!currentEntry) return;
   const e = currentEntry;
-  const lines = [
-    `${e.name} - ${e.zone.replace(/_/g, " ")}`,
-    `NM id ${e.id} (0x${e.id.toString(16).toUpperCase()}), chance ${e.chance}%, PH respawn ${e.respawn || "?"}`,
-  ];
+  const lines = [`${e.name} - ${e.zone.replace(/_/g, " ")} [${CATEGORY_LABEL[e.category] || "NM"}]`];
+  if (e.category === "lottery") {
+    lines.push(`NM id ${e.id} (0x${e.id.toString(16).toUpperCase()}), chance ${e.chance}%, PH respawn ${e.respawn || "?"}`);
+  } else {
+    lines.push(`NM id ${e.id} (0x${e.id.toString(16).toUpperCase()})`);
+    lines.push(`Conditions: ${(e.conditions || []).join("; ") || "Unknown"}`);
+  }
   if (e.pos) lines.push(`NM spawn: ${e.pos.map((v) => v.toFixed(3)).join(" ")}`);
   e.placeholders.forEach((ph, i) => {
     const pos = ph.pos ? ph.pos.map((v) => v.toFixed(3)).join(" ") : "?";
@@ -218,7 +233,7 @@ async function searchNm() {
       populate(hits.sort((a, b) => a.name.localeCompare(b.name)));
       setStatus(`${hits.length} match(es) across all zones.`);
     } else {
-      setStatus(`No lottery NM named like '${term}' found.`);
+      setStatus(`No NM named like '${term}' found.`);
     }
   } catch (e) {
     setStatus(`Error: ${e.message || e}`);

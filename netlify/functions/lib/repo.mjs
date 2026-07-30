@@ -9,6 +9,9 @@ import {
   parseMobDroplist,
   parseItemBasic,
   dropTypeLabel,
+  parseNmHeader,
+  describeSpawnConditions,
+  fmtSecs,
   zoneIdOf,
   titleCase,
 } from "./parser.mjs";
@@ -133,6 +136,25 @@ export class Repo {
     }
   }
 
+  groupFor(mobid) {
+    const sp = this.spawnPoints.get(mobid);
+    if (!sp || sp.groupid == null) return null;
+    return this.mobGroups.get(`${zoneIdOf(mobid)}:${sp.groupid}`) || null;
+  }
+
+  // Resolve a mob script's own mobid from its filename, the same way
+  // GetFirstID('Name') is resolved: by polutils_name, narrowed to the zone.
+  // Needed for non-lottery NMs, which usually never reference their own id
+  // anywhere in their own script (unlike lottery placeholders).
+  resolveOwnMobId(baseName, targetZoneId) {
+    let cands = this.nameIndex.get(baseName.toLowerCase()) || [];
+    if (targetZoneId != null) {
+      const inZone = cands.filter((c) => zoneIdOf(c) === targetZoneId);
+      if (inZone.length) cands = inZone;
+    }
+    return cands.length ? Math.min(...cands) : null;
+  }
+
   dropsFor(mobid) {
     const sp = this.spawnPoints.get(mobid);
     if (!sp || sp.groupid == null) return [];
@@ -162,6 +184,7 @@ export class Repo {
     const files = await this.listZoneMobs(zone);
     if (!files.length) return {};
 
+    const targetZoneId = this.zoneIdFor(zone);
     const phLists = {};
     const despawns = {};
 
@@ -169,7 +192,12 @@ export class Repo {
       files.map(async (path) => {
         try {
           const text = await this.rawScript(path);
-          return [path, parsePhList(text, ids), parsePhOnDespawn(text, ids)];
+          return {
+            path,
+            phl: parsePhList(text, ids),
+            dsp: parsePhOnDespawn(text, ids),
+            header: parseNmHeader(text),
+          };
         } catch {
           return null;
         }
@@ -178,19 +206,20 @@ export class Repo {
 
     for (const res of results) {
       if (!res) continue;
-      const [, phl, dsp] = res;
-      for (const [nmId, phs] of Object.entries(phl)) {
+      for (const [nmId, phs] of Object.entries(res.phl)) {
         if (!phLists[nmId]) phLists[nmId] = [];
         const known = new Set(phLists[nmId].map((p) => p.id));
         for (const p of phs) if (!known.has(p.id)) phLists[nmId].push(p);
       }
-      Object.assign(despawns, dsp);
+      Object.assign(despawns, res.dsp);
     }
 
     const idToName = {};
     for (const [k, v] of Object.entries(ids)) if (Number.isInteger(v)) idToName[v] = k;
 
     const nms = {};
+
+    // Lottery NMs (entity.phList-based) — unchanged from before.
     for (const [nmIdStr, phs] of Object.entries(phLists)) {
       const nmId = Number(nmIdStr);
       const info = despawns[nmId] || {};
@@ -198,17 +227,41 @@ export class Repo {
         id: nmId,
         zone,
         const: idToName[nmId] || "",
+        category: "lottery",
         placeholders: phs.slice().sort((a, b) => a.id - b.id),
         chance: info.chance ?? null,
         respawn: info.respawn || "",
+        conditions: [],
       };
     }
+
+    // Timed/conditional NMs: any script whose header says "NM:"/"HNM:" that
+    // isn't already accounted for above as a lottery NM.
+    for (const res of results) {
+      if (!res || !res.header) continue;
+      const baseName = res.path.split("/").pop().replace(/\.lua$/i, "");
+      const mobId = this.resolveOwnMobId(baseName, targetZoneId);
+      if (mobId == null || nms[mobId]) continue;
+      const group = this.groupFor(mobId);
+      nms[mobId] = {
+        id: mobId,
+        zone,
+        const: idToName[mobId] || "",
+        category: res.header.tag === "HNM" ? "hnm" : "nm",
+        placeholders: [],
+        chance: null,
+        respawn: group?.respawntime ? fmtSecs(group.respawntime) : "",
+        conditions: describeSpawnConditions(group?.spawntype ?? 0, group?.respawntime ?? null),
+        headerName: res.header.name,
+      };
+    }
+
     return nms;
   }
 
   decorate(entry) {
     const sp = this.spawnPoints.get(entry.id) || {};
-    entry.name = sp.name || titleCase(entry.const.replace(/_/g, " "));
+    entry.name = sp.name || entry.headerName || titleCase(entry.const.replace(/_/g, " "));
     entry.pos = sp.pos || null;
     entry.drops = this.dropsFor(entry.id);
     for (const ph of entry.placeholders) {
@@ -216,6 +269,7 @@ export class Repo {
       ph.name = psp.name || "?";
       ph.pos = psp.pos || ph.hint_pos || null;
     }
+    delete entry.headerName;
     return entry;
   }
 }

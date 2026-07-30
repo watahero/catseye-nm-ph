@@ -129,6 +129,33 @@ button.secondary:hover {
   font-size: 1.05rem;
 }
 
+.badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
+.badge-lottery {
+  background: #3a2f1f;
+  color: #e8b979;
+}
+
+.badge-nm {
+  background: #1f2f3a;
+  color: #7ec1e8;
+}
+
+.badge-hnm {
+  background: #3a1f1f;
+  color: #e87979;
+}
+
 .sub {
   color: var(--text-dim);
   font-size: 0.85rem;

@@ -252,6 +252,43 @@ export function parsePhOnDespawn(text, ids) {
   return out;
 }
 
+// Every genuine NM's script file opens with a header comment naming it, and
+// crucially distinguishes tier: regular mobs say "-- Mob: X", real NMs say
+// "-- NM: X" or "-- HNM: X" (high-tier). This is the reliable signal for
+// "is this actually an NM" independent of whether it uses entity.phList.
+const NM_HEADER = /^--\s*(H?NM):\s*(.+?)\s*$/im;
+
+export function parseNmHeader(text) {
+  const m = NM_HEADER.exec(text);
+  return m ? { tag: m[1].toUpperCase(), name: m[2].trim() } : null;
+}
+
+// SPAWNTYPE bitmask, from src/map/entities/mobentity.h in the server source.
+const SPAWNTYPE = {
+  ATNIGHT: 0x01,
+  ATEVENING: 0x02,
+  WEATHER: 0x04,
+  FOG: 0x08,
+  MOONPHASE: 0x10,
+  LOTTERY: 0x20,
+  WINDOWED: 0x40,
+  SCRIPTED: 0x80,
+};
+
+export function describeSpawnConditions(spawntype, respawntime) {
+  const conds = [];
+  if (spawntype & SPAWNTYPE.ATNIGHT) conds.push("Night only (20:00–04:00)");
+  if (spawntype & SPAWNTYPE.ATEVENING) conds.push("Evening only (18:00–06:00)");
+  if (spawntype & SPAWNTYPE.WEATHER) conds.push("Weather-dependent");
+  if (spawntype & SPAWNTYPE.FOG) conds.push("Fog only (02:00–07:00)");
+  if (spawntype & SPAWNTYPE.MOONPHASE) conds.push("Moon phase-dependent");
+  if (spawntype & SPAWNTYPE.WINDOWED) conds.push("Spawns in a randomized window");
+  if (spawntype & SPAWNTYPE.SCRIPTED) conds.push("Custom/scripted spawn condition");
+  if (!conds.length) conds.push("Timed respawn");
+  if (respawntime) conds.push(`Respawn timer: ${fmtSecs(respawntime)}`);
+  return conds;
+}
+
 const SPAWN_ROW = /VALUES\s*\((.+?)\);/gi;
 
 export function splitSqlValues(raw) {
@@ -309,8 +346,9 @@ export function parseMobSpawnPoints(text) {
   return spawn;
 }
 
-// -- mob_groups: (zoneid, groupid) -> {dropid, name}. Links a spawn point's
-// groupid to the dropid used in mob_droplist. --
+// -- mob_groups: (zoneid, groupid) -> {dropid, name, respawntime, spawntype}.
+// Links a spawn point's groupid to the dropid used in mob_droplist, and to
+// the SPAWNTYPE bitmask that describes non-lottery spawn conditions. --
 export function parseMobGroups(text) {
   const groups = new Map();
   for (const m of text.matchAll(SPAWN_ROW)) {
@@ -318,9 +356,16 @@ export function parseMobGroups(text) {
     if (f.length < 7) continue;
     const groupid = parseInt(f[0], 10);
     const zoneid = parseInt(f[2], 10);
+    const respawntime = parseInt(f[4], 10);
+    const spawntype = parseInt(f[5], 10);
     const dropid = parseInt(f[6], 10);
     if (Number.isNaN(groupid) || Number.isNaN(zoneid) || Number.isNaN(dropid)) continue;
-    groups.set(`${zoneid}:${groupid}`, { dropid, name: f[3] || "" });
+    groups.set(`${zoneid}:${groupid}`, {
+      dropid,
+      name: f[3] || "",
+      respawntime: Number.isNaN(respawntime) ? null : respawntime,
+      spawntype: Number.isNaN(spawntype) ? 0 : spawntype,
+    });
   }
   return groups;
 }

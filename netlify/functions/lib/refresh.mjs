@@ -49,6 +49,6 @@ export async function runRefresh(log = console.log) {
   await store.setJSON("meta", meta);
 
   const seconds = ((Date.now() - started) / 1000).toFixed(1);
-  log(`Done in ${seconds}s. ${zones.length} zones, ${totalNMs} lottery NM(s) total.`);
+  log(`Done in ${seconds}s. ${zones.length} zones, ${totalNMs} NM(s) total.`);
   return meta;
 }
