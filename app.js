@@ -43,17 +43,6 @@ function setStatus(msg) {
   $("status").textContent = msg;
 }
 
-function resolveZoneInput(raw) {
-  const typed = raw.trim();
-  if (!typed) return null;
-  if (allZones.includes(typed)) return typed;
-  const norm = typed.toLowerCase().replace(/\s+/g, "_");
-  let match = allZones.find((z) => z.toLowerCase() === norm);
-  if (match) return match;
-  match = allZones.find((z) => z.toLowerCase().startsWith(norm));
-  return match || null;
-}
-
 async function startup() {
   setStatus("Loading zone list...");
   try {
@@ -63,12 +52,13 @@ async function startup() {
       .filter((z) => z.count > 0 && !z.error)
       .map((z) => z.zone)
       .sort();
-    const list = $("zoneList");
-    list.innerHTML = "";
+    const select = $("zoneInput");
+    select.innerHTML = '<option value="">Select a zone&hellip;</option>';
     for (const z of allZones) {
       const opt = document.createElement("option");
-      opt.value = z.replace(/_/g, " ");
-      list.appendChild(opt);
+      opt.value = z;
+      opt.textContent = z.replace(/_/g, " ");
+      select.appendChild(opt);
     }
     const updated = meta.updatedAt ? new Date(meta.updatedAt).toLocaleString() : "unknown";
     $("dataInfo").textContent =
@@ -81,13 +71,8 @@ async function startup() {
   }
 }
 
-async function loadZone() {
-  const zone = resolveZoneInput($("zoneInput").value);
-  if (!zone) {
-    setStatus("No matching zone. Pick one from the list.");
-    return;
-  }
-  $("zoneInput").value = zone.replace(/_/g, " ");
+async function loadZone(zone) {
+  if (!zone) return;
   $("nmSelect").innerHTML = "";
   $("nmSelect").disabled = true;
   setStatus(`Loading ${zone.replace(/_/g, " ")}...`);
@@ -214,15 +199,7 @@ async function searchNm() {
 }
 
 function init() {
-  $("zoneInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") loadZone();
-  });
-  // Auto-load as soon as the typed/selected text exactly matches a real zone
-  // (this fires immediately when picking an option from the datalist).
-  $("zoneInput").addEventListener("input", (e) => {
-    const typed = e.target.value.trim().toLowerCase();
-    if (allZones.some((z) => z.replace(/_/g, " ").toLowerCase() === typed)) loadZone();
-  });
+  $("zoneInput").addEventListener("change", (e) => loadZone(e.target.value));
   $("nmSelect").addEventListener("change", (e) => {
     const idx = e.target.selectedIndex;
     if (idx >= 0 && idx < currentEntries.length) selectEntry(currentEntries[idx]);
