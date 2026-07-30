@@ -292,8 +292,9 @@ export function parseMobSpawnPoints(text) {
     const mobid = parseInt(f[0], 10);
     if (Number.isNaN(mobid)) continue;
     const names = f.slice(1, 5).filter((v) => !numRe.test(v));
-    // columns: mobid, mobgroup, polutils_name, name, respawntime,
-    //          spawntype, dropid, pos_x, pos_y, pos_z, pos_rot, ...
+    // columns: mobid, spawnslotid, mobname, polutils_name, groupid,
+    //          minLevel, maxLevel, pos_x, pos_y, pos_z, pos_rot
+    const groupid = parseInt(f[4], 10);
     const x = parseFloat(f[7]);
     const y = parseFloat(f[8]);
     const z = parseFloat(f[9]);
@@ -301,10 +302,97 @@ export function parseMobSpawnPoints(text) {
     spawn.set(mobid, {
       polutils: names[0] || "",
       name: names.length > 1 ? names[1] : names[0] || "",
+      groupid: Number.isNaN(groupid) ? null : groupid,
       pos,
     });
   }
   return spawn;
+}
+
+// -- mob_groups: (zoneid, groupid) -> {dropid, name}. Links a spawn point's
+// groupid to the dropid used in mob_droplist. --
+export function parseMobGroups(text) {
+  const groups = new Map();
+  for (const m of text.matchAll(SPAWN_ROW)) {
+    const f = splitSqlValues(m[1]);
+    if (f.length < 7) continue;
+    const groupid = parseInt(f[0], 10);
+    const zoneid = parseInt(f[2], 10);
+    const dropid = parseInt(f[6], 10);
+    if (Number.isNaN(groupid) || Number.isNaN(zoneid) || Number.isNaN(dropid)) continue;
+    groups.set(`${zoneid}:${groupid}`, { dropid, name: f[3] || "" });
+  }
+  return groups;
+}
+
+// mob_droplist.sql rate columns are frequently a SQL user variable
+// (`@COMMON`, `@VCOMMON`, ...) rather than a literal number, e.g.
+// `(2427,0,0,1000,4368,@VCOMMON)`. The file defines them up top as
+// `SET @VCOMMON = 240;`, so we resolve those ourselves.
+function parseSqlVarDefs(text) {
+  const defs = new Map();
+  for (const m of text.matchAll(/^SET\s+@([A-Za-z0-9_]+)\s*=\s*(-?\d+(?:\.\d+)?)\s*;/gim)) {
+    defs.set(m[1].toUpperCase(), parseFloat(m[2]));
+  }
+  return defs;
+}
+
+function resolveSqlNumber(field, varDefs) {
+  if (field.startsWith("@")) {
+    const v = varDefs.get(field.slice(1).toUpperCase());
+    return v == null ? NaN : v;
+  }
+  return parseFloat(field);
+}
+
+// -- mob_droplist: dropid -> [{itemId, dropType, rate}]. rate is the
+// effective drop chance in percent (groupRate * itemRate / 10000); for
+// dropType Steal/Despoil the raw itemRate is normally 0 (the chance is
+// governed by the steal/despoil action itself, not a drop roll). --
+export function parseMobDroplist(text) {
+  const varDefs = parseSqlVarDefs(text);
+  const drops = new Map();
+  for (const m of text.matchAll(SPAWN_ROW)) {
+    const f = splitSqlValues(m[1]);
+    if (f.length < 6) continue;
+    const dropId = parseInt(f[0], 10);
+    const dropType = parseInt(f[1], 10);
+    const groupRate = resolveSqlNumber(f[3], varDefs);
+    const itemId = parseInt(f[4], 10);
+    const itemRate = resolveSqlNumber(f[5], varDefs);
+    if ([dropId, dropType, groupRate, itemId, itemRate].some(Number.isNaN)) continue;
+    if (!drops.has(dropId)) drops.set(dropId, []);
+    drops.get(dropId).push({ itemId, dropType, rate: (groupRate * itemRate) / 10000 });
+  }
+  return drops;
+}
+
+// -- item_basic: itemid -> internal snake_case name (no separate "pretty"
+// name table in this schema; we title-case it for display). --
+export function parseItemBasic(text) {
+  const items = new Map();
+  for (const m of text.matchAll(SPAWN_ROW)) {
+    const f = splitSqlValues(m[1]);
+    if (f.length < 3) continue;
+    const itemid = parseInt(f[0], 10);
+    if (Number.isNaN(itemid)) continue;
+    if (f[2]) items.set(itemid, f[2]);
+  }
+  return items;
+}
+
+export function dropTypeLabel(dropType) {
+  switch (dropType) {
+    case 0:
+    case 1:
+      return "Drop";
+    case 2:
+      return "Steal";
+    case 4:
+      return "Despoil";
+    default:
+      return `Type ${dropType}`;
+  }
 }
 
 export function parseZoneSettings(text) {

@@ -139,6 +139,15 @@ button.secondary:hover {
   overflow-x: auto;
 }
 
+.drops-heading {
+  margin: 16px 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

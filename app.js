@@ -98,6 +98,7 @@ function populate(entries) {
     $("sub").textContent =
       "Every NM in this zone is a timed or forced spawn (no entity.phList in its script).";
     renderTable(null);
+    renderDrops(null);
     return;
   }
 
@@ -125,6 +126,7 @@ function selectEntry(e) {
     `Spawn chance per PH kill: ${chance}${capTxt}   |   PH respawn: ${respawn}   |   ` +
     `${e.placeholders.length} placeholder(s)   |   Mob ID ${e.id} (0x${e.id.toString(16).toUpperCase()})`;
   renderTable(e);
+  renderDrops(e);
   updateCalc();
 }
 
@@ -141,6 +143,24 @@ function renderTable(e) {
     tr.innerHTML = `<td>${role}</td><td>${name}</td><td>${mid}</td><td>0x${mid
       .toString(16)
       .toUpperCase()}</td><td>${x}</td><td>${y}</td><td>${z}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function renderDrops(e) {
+  const tbody = $("dropsBody");
+  tbody.innerHTML = "";
+  const drops = e?.drops || [];
+  if (!drops.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="3" class="sub">No known drops.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+  for (const d of drops) {
+    const tr = document.createElement("tr");
+    const rate = d.rate != null ? `${d.rate}%` : "—";
+    tr.innerHTML = `<td>${d.name}</td><td>${d.type}</td><td>${rate}</td>`;
     tbody.appendChild(tr);
   }
 }
@@ -170,6 +190,13 @@ async function copyDetails() {
     const pos = ph.pos ? ph.pos.map((v) => v.toFixed(3)).join(" ") : "?";
     lines.push(`PH ${i + 1}: ${ph.name || "?"}  id ${ph.id} (0x${ph.id.toString(16).toUpperCase()})  ${pos}`);
   });
+  if (e.drops && e.drops.length) {
+    lines.push("Drops:");
+    e.drops.forEach((d) => {
+      const rate = d.rate != null ? `${d.rate}%` : "";
+      lines.push(`  ${d.name} (${d.type}${rate ? ", " + rate : ""})`);
+    });
+  }
   lines.push("Tip: /mobdb -> edit tokens -> add ID:$id to the target line.");
   const text = lines.join("\n");
   try {
